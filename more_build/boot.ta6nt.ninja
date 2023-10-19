@@ -1,0 +1,5 @@
+m = ta6nt
+MACHINE_DEF = '(features iconv expeditor pthreads windows)(include "a6.def")(include "nt.def")'
+MACHINE_INCLUDE = x86_64.ss
+
+include boot.ninja

@@ -1,0 +1,20 @@
+m = ta6nt
+
+lz4 = lz4.dll
+zlib = zlib1.dll
+kernel = scheme.dll
+scheme = scheme.exe
+
+lz4_cflags = -D LZ4_DLL_EXPORT=1
+zlib_cflags = -D ZLIB_DLL
+chez_cflags = -D X86_64
+kernel_ldflags = -l lz4 -l zlib1 -l advapi32 -l user32 -l ole32 -l rpcrt4
+
+cc = clang --target=x86_64-windows-msvc
+cflags = -D _CRT_SECURE_NO_WARNINGS -D _CRT_NONSTDC_NO_DEPRECATE
+ldflags = -l msvcrt
+
+mo = windows
+asm = a6nt-jump
+
+include kernel.ninja

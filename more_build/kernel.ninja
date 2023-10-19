@@ -1,0 +1,160 @@
+root = .
+builddir = build/c.$m
+cflags = $cflags -pthread -O3 -m64 -msse2 -Wextra -Wall -Wno-unused-parameter
+ldflags = $ldflags -fuse-ld=lld
+lz4_cflags = $lz4_cflags
+zlib_cflags = $zlib_cflags -D HAVE_STDARG_H
+chez_cflags = $chez_cflags -I $builddir/../boot/$m -I $root -I $root/../lz4/lib -I $root/../zlib
+
+rule cc_lz4
+  command = $cc -o $out -MT $out -MMD -MP -MF $out.d $cflags $lz4_cflags $in -c
+  depfile = $out.d
+  deps = gcc
+  description = CC LZ4 $out
+
+rule cc_zlib
+  command = $cc -o $out -MT $out -MMD -MP -MF $out.d $cflags $zlib_cflags $in -c
+  depfile = $out.d
+  deps = gcc
+  description = CC ZLIB $out
+
+rule cc_chez
+  command = $cc -o $out -MT $out -MMD -MP -MF $out.d $cflags $chez_cflags $in -c
+  depfile = $out.d
+  deps = gcc
+  description = CC CHEZ $out
+
+rule cc_dummy
+  command = $cc -o $out $root/empty.c -c
+  description = CC DUMMY $out
+
+rule ld_lib
+  command = $cc -o $out $in $ldflags -shared
+  description = LD LIB $out
+
+rule ld_exe
+  command = $cc -o $out $in $ldflags
+  description = LD EXE $out
+
+build $builddir/lz4/lz4.o:      cc_lz4 $root/../lz4/lib/lz4.c
+build $builddir/lz4/lz4frame.o: cc_lz4 $root/../lz4/lib/lz4frame.c
+build $builddir/lz4/lz4hc.o:    cc_lz4 $root/../lz4/lib/lz4hc.c
+build $builddir/lz4/xxhash.o:   cc_lz4 $root/../lz4/lib/xxhash.c
+
+build $builddir/zlib/adler32.o:  cc_zlib $root/../zlib/adler32.c
+build $builddir/zlib/crc32.o:    cc_zlib $root/../zlib/crc32.c
+build $builddir/zlib/deflate.o:  cc_zlib $root/../zlib/deflate.c
+build $builddir/zlib/infback.o:  cc_zlib $root/../zlib/infback.c
+build $builddir/zlib/inffast.o:  cc_zlib $root/../zlib/inffast.c
+build $builddir/zlib/inflate.o:  cc_zlib $root/../zlib/inflate.c
+build $builddir/zlib/inftrees.o: cc_zlib $root/../zlib/inftrees.c
+build $builddir/zlib/trees.o:    cc_zlib $root/../zlib/trees.c
+build $builddir/zlib/zutil.o:    cc_zlib $root/../zlib/zutil.c
+build $builddir/zlib/compress.o: cc_zlib $root/../zlib/compress.c
+build $builddir/zlib/uncompr.o:  cc_zlib $root/../zlib/uncompr.c
+build $builddir/zlib/gzclose.o:  cc_zlib $root/../zlib/gzclose.c
+build $builddir/zlib/gzlib.o:    cc_zlib $root/../zlib/gzlib.c
+build $builddir/zlib/gzread.o:   cc_zlib $root/../zlib/gzread.c
+build $builddir/zlib/gzwrite.o:  cc_zlib $root/../zlib/gzwrite.c
+
+build $builddir/kernel/statics.o:     cc_chez $root/../c/statics.c
+build $builddir/kernel/segment.o:     cc_chez $root/../c/segment.c
+build $builddir/kernel/alloc.o:       cc_chez $root/../c/alloc.c
+build $builddir/kernel/symbol.o:      cc_chez $root/../c/symbol.c
+build $builddir/kernel/intern.o:      cc_chez $root/../c/intern.c
+build $builddir/kernel/gcwrapper.o:   cc_chez $root/../c/gcwrapper.c
+build $builddir/kernel/gc-011.o:      cc_chez $root/../c/gc-011.c
+build $builddir/kernel/gc-par.o:      cc_chez $root/../c/gc-par.c
+build $builddir/kernel/gc-ocd.o:      cc_chez $root/../c/gc-ocd.c
+build $builddir/kernel/gc-oce.o:      cc_chez $root/../c/gc-oce.c
+build $builddir/kernel/number.o:      cc_chez $root/../c/number.c
+build $builddir/kernel/schsig.o:      cc_chez $root/../c/schsig.c
+build $builddir/kernel/io.o:          cc_chez $root/../c/io.c
+build $builddir/kernel/new-io.o:      cc_chez $root/../c/new-io.c
+build $builddir/kernel/compress-io.o: cc_chez $root/../c/compress-io.c
+build $builddir/kernel/fasl.o:        cc_chez $root/../c/fasl.c
+build $builddir/kernel/vfasl.o:       cc_chez $root/../c/vfasl.c
+build $builddir/kernel/print.o:       cc_chez $root/../c/print.c
+build $builddir/kernel/stats.o:       cc_chez $root/../c/stats.c
+build $builddir/kernel/foreign.o:     cc_chez $root/../c/foreign.c
+build $builddir/kernel/prim.o:        cc_chez $root/../c/prim.c
+build $builddir/kernel/prim5.o:       cc_chez $root/../c/prim5.c
+build $builddir/kernel/flushcache.o:  cc_chez $root/../c/flushcache.c
+build $builddir/kernel/schlib.o:      cc_chez $root/../c/schlib.c
+build $builddir/kernel/thread.o:      cc_chez $root/../c/thread.c
+build $builddir/kernel/expeditor.o:   cc_chez $root/../c/expeditor.c
+build $builddir/kernel/scheme.o:      cc_chez $root/../c/scheme.c
+build $builddir/kernel/random.o:      cc_chez $root/../c/random.c
+build $builddir/kernel/ffi.o:         cc_chez $root/../c/ffi.c
+build $builddir/kernel/self-exe.o:    cc_chez $root/../c/self-exe.c
+build $builddir/kernel/$mo.o:         cc_chez $root/../c/$mo.c
+
+build $builddir/kernel/$asm.o:        cc_chez $root/$asm.S
+
+build $builddir/main/main.o:          cc_chez $root/../c/main.c
+
+build $builddir/$lz4: ld_lib $
+  $builddir/lz4/lz4.o $
+  $builddir/lz4/lz4frame.o $
+  $builddir/lz4/lz4hc.o $
+  $builddir/lz4/xxhash.o
+
+build $builddir/$zlib: ld_lib $
+  $builddir/zlib/adler32.o $
+  $builddir/zlib/crc32.o $
+  $builddir/zlib/deflate.o $
+  $builddir/zlib/infback.o $
+  $builddir/zlib/inffast.o $
+  $builddir/zlib/inflate.o $
+  $builddir/zlib/inftrees.o $
+  $builddir/zlib/trees.o $
+  $builddir/zlib/zutil.o $
+  $builddir/zlib/compress.o $
+  $builddir/zlib/uncompr.o $
+  $builddir/zlib/gzclose.o $
+  $builddir/zlib/gzlib.o $
+  $builddir/zlib/gzread.o $
+  $builddir/zlib/gzwrite.o
+
+build $builddir/$kernel: ld_lib $
+  $builddir/kernel/statics.o $
+  $builddir/kernel/segment.o $
+  $builddir/kernel/alloc.o $
+  $builddir/kernel/symbol.o $
+  $builddir/kernel/intern.o $
+  $builddir/kernel/gcwrapper.o $
+  $builddir/kernel/gc-011.o $
+  $builddir/kernel/gc-par.o $
+  $builddir/kernel/gc-ocd.o $
+  $builddir/kernel/gc-oce.o $
+  $builddir/kernel/number.o $
+  $builddir/kernel/schsig.o $
+  $builddir/kernel/io.o $
+  $builddir/kernel/new-io.o $
+  $builddir/kernel/compress-io.o $
+  $builddir/kernel/print.o $
+  $builddir/kernel/fasl.o $
+  $builddir/kernel/vfasl.o $
+  $builddir/kernel/stats.o $
+  $builddir/kernel/foreign.o $
+  $builddir/kernel/prim.o $
+  $builddir/kernel/prim5.o $
+  $builddir/kernel/flushcache.o $
+  $builddir/kernel/schlib.o $
+  $builddir/kernel/thread.o $
+  $builddir/kernel/expeditor.o $
+  $builddir/kernel/scheme.o $
+  $builddir/kernel/random.o $
+  $builddir/kernel/ffi.o $
+  $builddir/kernel/self-exe.o $
+  $builddir/kernel/$mo.o $
+  $builddir/kernel/$asm.o $
+  | $builddir/$lz4 $builddir/$zlib
+  ldflags = $ldflags -L $builddir $kernel_ldflags
+
+build $builddir/$scheme: ld_exe $
+  $builddir/main/main.o $
+  | $builddir/$kernel
+  ldflags = $ldflags -L $builddir $chez_ldflags -l scheme
+
+default $builddir/$lz4 $builddir/$zlib $builddir/$kernel $builddir/$scheme

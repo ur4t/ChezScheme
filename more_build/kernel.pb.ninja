@@ -1,0 +1,7 @@
+m = pb
+
+chez_cflags = -D PORTABLE_BYTECODE
+
+mo = pb
+
+include kernel.unix.ninja

@@ -1,0 +1,569 @@
+# the following flags control various compiler options.  flags prefixed by an x
+# separately control the options used while compiling a cross compiler.
+
+# o determines the optimize level
+o = 3
+
+# d is the debug level at which the system should be built
+d = 0
+
+# cl determines the commonization level
+cl = (commonization-level)
+
+# i determines whether inspector-information is generated: f for false, t for true
+i = f
+
+# cp0 determines the number of cp0 (source optimizer) iterations run
+cp0 = 2
+
+# fc determines whether fasl objects are compressed
+fc = t
+
+# xf determines the compression format
+xf = (compress-format)
+
+# xl determine the compression level
+xl = (compress-level)
+
+# p (xp) determines whether source profiling is enabled: f for false, t for true.
+p = f
+xp = f
+
+# bp (xpb) determines whether binary profiling is enabled: f for false, t for true.
+bp = f
+xbp = f
+
+# loadspd determines whether source-profile data is loaded: f for false, t for true
+loadspd = f
+
+# dumpspd determines whether source-profile data is dumped: f for false, t for true
+dumpspd = f
+
+# loadbpd determines whether binary-profile data is loaded: f for false, t for true
+loadbpd = f
+
+# dumpbpd determines whether binary-profile data is dumped: f for false, t for true
+dumpbpd = f
+
+# compile determines the entry point for compilng files
+# another useful value for this is compile-with-asm, defined in debug.ss
+compile = compile-file
+
+# pdhtml determines whether profile-dump-html is called at the end of a build
+pdhtml = f
+
+# gac determines whether cost-center allocation counts are generated: f for false, t for true
+gac = f
+
+# gic determines whether cost-center instruction counts are generated: f for false, t for true
+gic = f
+
+# pps determines whether pass timings are printed
+pps = f
+
+# msg determines whether compile message are printed
+msg = f
+
+# TIME determines whether time used to compile objects are printed
+# begin can be used to replace time
+# TIME = time
+TIME = begin
+
+# TODO: generate gcc style depfiles
+
+root = .
+builddir = build/s.xc.$m
+
+scheme = scheme
+
+ProfileDumpSource = $builddir/source.pd
+ProfileDumpBlock  = $builddir/block.pd
+
+chez_s_path = $root/../s
+nanopass_path = $root/../nanopass
+unicode_path = $root/../unicode
+
+SETUP_BASIC = $
+  '(reset-handler abort)' $
+  '(base-exception-handler (lambda (c) (fresh-line) (display-condition c) (newline) (reset)))' $
+  '(keyboard-interrupt-handler (lambda () (display "interrupted---aborting\n") (reset)))' $
+  '(optimize-level $o)' $
+  '(debug-level $d)' $
+  '(commonization-level $cl)' $
+  '(fasl-compressed #$fc)' $
+  '(compress-format $xf)' $
+  '(compress-level $xl)' $
+  '(generate-inspector-information #$i)' $
+  '(generate-allocation-counts #${gac})' $
+  '(generate-instruction-counts #${gic})' $
+  '(compile-file-message #$msg)' $
+  ''
+
+SETUP_GC = $
+  '(collect-trip-bytes (expt 2 24))' $
+  '(collect-request-handler (lambda () (collect 0 1)))' $
+  '(collect 1 2)' $
+  ''
+
+SETUP_CP0 = '(run-cp0 (lambda (cp0 x) (do ([i ${cp0} (fx- i 1)] [x x (cp0 x)]) ((fx= i 0) x))))'
+
+DUMP_PROFILE = $
+  '(when #${pdhtml} (profile-dump-html))' $
+  '(when #${dumpspd} (profile-dump-data "${ProfileDumpSource}"))' $
+  '(when #${dumpbpd} (profile-dump-data "${ProfileDumpBlock}"))' $
+  ''
+
+SETUP_NANOPASS_PATH = '(library-directories (list (cons "$nanopass_path" "$builddir/nanopass")))'
+
+rule gen_machine_def
+  command = echo '(define-constant machine-type (constant machine-type-$m))' $MACHINE_DEF '(include "default.def")' > $out
+  description = GEN $out
+
+rule compile_macro
+  command = echo $SETUP_BASIC '(subset-mode (quote system))' $
+    '(source-directories (list "$chez_s_path" $more_path))' $
+    '(compile-file "$in" "$out" (machine-type))' $
+    | $scheme -q $prerequisites
+  description = COMPILE MACRO $out
+
+rule compile_mkinc
+  command = echo $SETUP_BASIC '(subset-mode (quote system))' $
+    '(source-directories (list "$chez_s_path" $more_path))' $
+    '(compile-file "$in" "$out" (machine-type))' $
+    | $scheme -q $prerequisites $
+    $builddir/macro/cmacros.so $
+    $builddir/macro/priminfo.so $
+    $builddir/macro/primvars.so $
+    $builddir/macro/env.so
+  description = COMPILE MKINC $out
+
+rule compile_nanopass
+  command = echo $SETUP_BASIC $SETUP_GC $SETUP_NANOPASS_PATH $
+    '(compile-library "$in" "$out" (machine-type))' $
+    | $scheme -q --compile-imported-libraries
+  description = COMPILE NANOPASS $out
+
+rule compile_patch
+  command = echo $
+    $SETUP_BASIC $
+    '(when #$xp (compile-profile (quote source)))' $
+    '(when #$xbp (compile-profile (quote block)))' $
+    $SETUP_CP0 $
+    $SETUP_GC $
+    '(print-gensym (quote pretty/suffix))' $
+    '(source-directories (list "$chez_s_path"))' $
+    $SETUP_NANOPASS_PATH $
+    '($TIME (${compile} "$in" "$out" (machine-type)))' $
+    $DUMP_PROFILE $
+    | $scheme -q $
+    $builddir/macro/cmacros.so $
+    $builddir/macro/priminfo.so $
+    $builddir/macro/primvars.so $
+    $builddir/macro/env.so $
+    $builddir/macro/setup.so $
+    $nanopass
+  description = COMPILE PATCH $out
+
+rule compile_target
+  command = echo $
+    $SETUP_BASIC $
+    '(when #$p (compile-profile (quote source)))'$
+    '(when #$bp (compile-profile (quote block)))'$
+    '(when #$loadspd (profile-load-data "${ProfileDumpSource}"))'$
+    '(when #$loadbpd (profile-load-data "${ProfileDumpBlock}"))'$
+    $SETUP_CP0 $
+    $SETUP_GC $
+    '(print-gensym (quote pretty/suffix))'$
+    '(source-directories (list "$chez_s_path" $more_path))'$
+    $SETUP_NANOPASS_PATH $
+    '($TIME (${compile} "$in" "$out" (quote $m)))' $
+    $DUMP_PROFILE $
+    | $scheme -q $
+    $builddir/macro/cmacros.so $
+    $builddir/macro/priminfo.so $
+    $builddir/macro/primvars.so $
+    $builddir/macro/env.so $
+    $builddir/macro/setup.so $
+    $builddir/patch/patch.so $
+    $builddir/patch/cpnanopass.so $
+    $builddir/patch/cpprim.so $
+    $builddir/patch/cprep.so $
+    $builddir/patch/cpcheck.so $
+    $builddir/patch/cp0.so $
+    $builddir/patch/cpvalid.so $
+    $builddir/patch/cptypes.so $
+    $builddir/patch/cpcommonize.so $
+    $builddir/patch/cpletrec.so $
+    $builddir/patch/reloc.so $
+    $builddir/patch/compile.so $
+    $builddir/patch/fasl.so $
+    $builddir/patch/vfasl.so $
+    $builddir/patch/pbchunk.so $
+    $builddir/patch/syntax.so $
+    $builddir/patch/env.so $
+    $builddir/patch/read.so $
+    $builddir/patch/interpret.so $
+    $builddir/patch/ftype.so $
+    $builddir/patch/strip.so $
+    $builddir/patch/ubify.so $
+    $builddir/patch/back.so $
+    $nanopass > /dev/null
+  description = COMPILE TARGET $out
+
+rule make_boot_file
+  command = echo '(reset-handler abort)' $
+    '(apply #%$$make-boot-file "$out" (quote $m) (quote ($base_boot_file))' $
+    '  (map symbol->string (quote ($in))))' $
+    | $scheme -q $
+    $builddir/macro/cmacros.so $
+    $builddir/macro/priminfo.so $
+    $builddir/macro/primvars.so $
+    $builddir/macro/env.so $
+    $builddir/macro/setup.so $
+    $builddir/patch/patch.so $
+    $builddir/patch/cpnanopass.so $
+    $builddir/patch/cpprim.so $
+    $builddir/patch/cprep.so $
+    $builddir/patch/cpcheck.so $
+    $builddir/patch/cp0.so $
+    $builddir/patch/cpvalid.so $
+    $builddir/patch/cptypes.so $
+    $builddir/patch/cpcommonize.so $
+    $builddir/patch/cpletrec.so $
+    $builddir/patch/reloc.so $
+    $builddir/patch/compile.so $
+    $builddir/patch/fasl.so $
+    $builddir/patch/vfasl.so $
+    $builddir/patch/pbchunk.so $
+    $builddir/patch/syntax.so $
+    $builddir/patch/env.so $
+    $builddir/patch/read.so $
+    $builddir/patch/interpret.so $
+    $builddir/patch/ftype.so $
+    $builddir/patch/strip.so $
+    $builddir/patch/ubify.so $
+    $builddir/patch/back.so > /dev/null
+  description = MAKE BOOT FILE $out
+
+rule make_header
+  command = echo '(reset-handler abort)' $
+    '(mk$target "$out" $more_args)' $
+    | $scheme -q $
+    $builddir/nanopass/nanopass.so $
+    $builddir/macro/cmacros.so $
+    $builddir/macro/priminfo.so $
+    $builddir/macro/primvars.so $
+    $builddir/macro/env.so $
+    $builddir/macro/setup.so $
+    $builddir/mkinc/mkheader.so
+  description = MAKE HEADER $out
+
+rule make_include
+  command = echo '(reset-handler abort)' $
+    '(mk$target "$out")' $
+    | $scheme -q $
+    $builddir/nanopass/nanopass.so $
+    $builddir/macro/cmacros.so $
+    $builddir/macro/priminfo.so $
+    $builddir/macro/primvars.so $
+    $builddir/macro/env.so $
+    $builddir/macro/setup.so $
+    $builddir/mkinc/mkheader.so $
+    $builddir/mkinc/mkgc.so
+  description = MAKE INCLUDE $out
+
+# sources required to build cross compiler
+# putting cpnanopass.patch early for maximum make --jobs=2 benefit
+build patch_objs: phony $
+  $builddir/patch/patch.so $
+  $builddir/patch/cpnanopass.so $
+  $builddir/patch/cpprim.so $
+  $builddir/patch/cprep.so $
+  $builddir/patch/cpcheck.so $
+  $builddir/patch/cp0.so $
+  $builddir/patch/cpvalid.so $
+  $builddir/patch/cptypes.so $
+  $builddir/patch/cpcommonize.so $
+  $builddir/patch/cpletrec.so $
+  $builddir/patch/reloc.so $
+  $builddir/patch/compile.so $
+  $builddir/patch/fasl.so $
+  $builddir/patch/vfasl.so $
+  $builddir/patch/pbchunk.so $
+  $builddir/patch/syntax.so $
+  $builddir/patch/env.so $
+  $builddir/patch/read.so $
+  $builddir/patch/interpret.so $
+  $builddir/patch/ftype.so $
+  $builddir/patch/strip.so $
+  $builddir/patch/ubify.so $
+  $builddir/patch/back.so
+
+# ordering constraints in "petite.boot":
+#  first: library, prims, mathprims, front, 5_?
+#  last: back
+#  newhash before read
+#  io before read
+#  event before 4
+#  ftype after syntax
+#  layout and record before strnum (first define-record)
+#  date before 7
+# (there may be other constraints as well)
+build base_objs: phony $
+  $builddir/boot/library.$m $
+  $builddir/boot/prims.$m $
+  $builddir/boot/mathprims.$m $
+  $builddir/boot/record.$m $
+  $builddir/boot/5_1.$m $
+  $builddir/boot/5_2.$m $
+  $builddir/boot/5_3.$m $
+  $builddir/boot/strnum.$m $
+  $builddir/boot/bytevector.$m $
+  $builddir/boot/5_4.$m $
+  $builddir/boot/5_6.$m $
+  $builddir/boot/5_7.$m $
+  $builddir/boot/event.$m $
+  $builddir/boot/4.$m $
+  $builddir/boot/front.$m $
+  $builddir/boot/foreign.$m $
+  $builddir/boot/6.$m $
+  $builddir/boot/print.$m $
+  $builddir/boot/newhash.$m $
+  $builddir/boot/format.$m $
+  $builddir/boot/date.$m $
+  $builddir/boot/7.$m $
+  $builddir/boot/cafe.$m $
+  $builddir/boot/trace.$m $
+  $builddir/boot/engine.$m $
+  $builddir/boot/interpret.$m $
+  $builddir/boot/cprep.$m $
+  $builddir/boot/cpcheck.$m $
+  $builddir/boot/cp0.$m $
+  $builddir/boot/cpvalid.$m $
+  $builddir/boot/cptypes.$m $
+  $builddir/boot/cpcommonize.$m $
+  $builddir/boot/cpletrec.$m $
+  $builddir/boot/inspect.$m $
+  $builddir/boot/enum.$m $
+  $builddir/boot/io.$m $
+  $builddir/boot/read.$m $
+  $builddir/boot/primvars.$m $
+  $builddir/boot/syntax.$m $
+  $builddir/boot/costctr.$m $
+  $builddir/boot/expeditor.$m $
+  $builddir/boot/exceptions.$m $
+  $builddir/boot/pretty.$m $
+  $builddir/boot/env.$m $
+  $builddir/boot/fasl.$m $
+  $builddir/boot/vfasl.$m $
+  $builddir/boot/pbchunk.$m $
+  $builddir/boot/reloc.$m $
+  $builddir/boot/pdhtml.$m $
+  $builddir/boot/strip.$m $
+  $builddir/boot/ftype.$m $
+  $builddir/boot/back.$m
+
+build compiler_objs: phony $
+  $builddir/boot/cpnanopass.$m $
+  $builddir/boot/cpprim.$m $
+  $builddir/boot/compile.$m $
+  $builddir/boot/cback.$m
+
+build macro_objs: phony $
+  $builddir/macro/cmacros.so $
+  $builddir/macro/priminfo.so $
+  $builddir/macro/primvars.so $
+  $builddir/macro/env.so $
+  $builddir/macro/setup.so
+
+build mkinc_objs: phony $
+  $builddir/mkinc/mkgc.so $
+  $builddir/mkinc/mkheader.so
+
+build nanopass: phony $builddir/nanopass/nanopass.so
+
+build $builddir/machine.def: gen_machine_def
+
+build $builddir/macro/cmacros.so:  compile_macro $chez_s_path/cmacros.ss $
+  | $builddir/machine.def
+  more_path = "$builddir"
+build $builddir/macro/priminfo.so: compile_macro $chez_s_path/priminfo.ss $
+  | $builddir/macro/cmacros.so
+  prerequisites = $builddir/macro/cmacros.so
+build $builddir/macro/primvars.so: compile_macro $chez_s_path/primvars.ss $
+  | $builddir/macro/cmacros.so $builddir/macro/priminfo.so
+  prerequisites = $builddir/macro/cmacros.so $builddir/macro/priminfo.so
+build $builddir/macro/setup.so:    compile_macro $chez_s_path/setup.ss $
+  | $builddir/macro/cmacros.so $builddir/macro/priminfo.so
+  prerequisites = $builddir/macro/cmacros.so $builddir/macro/priminfo.so
+build $builddir/macro/env.so:      compile_macro $chez_s_path/env.ss $
+  | $builddir/macro/cmacros.so $builddir/macro/priminfo.so
+  prerequisites = $builddir/macro/cmacros.so $builddir/macro/priminfo.so
+
+build $builddir/mkinc/mkheader.so: compile_mkinc $chez_s_path/mkheader.ss | macro_objs
+build $builddir/mkinc/mkgc.so:     compile_mkinc $chez_s_path/mkgc.ss | macro_objs $builddir/mkinc/mkheader.so
+  prerequisites = $builddir/mkinc/mkheader.so
+
+build $builddir/nanopass/nanopass.so: compile_nanopass $nanopass_path/nanopass.ss
+
+build $builddir/patch/patch.so:       compile_patch $chez_s_path/patch.ss       | macro_objs
+build $builddir/patch/cpnanopass.so:  compile_patch $chez_s_path/cpnanopass.ss  | macro_objs nanopass
+  nanopass = $builddir/nanopass/nanopass.so
+build $builddir/patch/cpprim.so:      compile_patch $chez_s_path/cpprim.ss      | macro_objs
+build $builddir/patch/cprep.so:       compile_patch $chez_s_path/cprep.ss       | macro_objs
+build $builddir/patch/cpcheck.so:     compile_patch $chez_s_path/cpcheck.ss     | macro_objs
+build $builddir/patch/cp0.so:         compile_patch $chez_s_path/cp0.ss         | macro_objs
+build $builddir/patch/cpvalid.so:     compile_patch $chez_s_path/cpvalid.ss     | macro_objs
+build $builddir/patch/cptypes.so:     compile_patch $chez_s_path/cptypes.ss     | macro_objs
+build $builddir/patch/cpcommonize.so: compile_patch $chez_s_path/cpcommonize.ss | macro_objs
+build $builddir/patch/cpletrec.so:    compile_patch $chez_s_path/cpletrec.ss    | macro_objs
+build $builddir/patch/reloc.so:       compile_patch $chez_s_path/reloc.ss       | macro_objs
+build $builddir/patch/compile.so:     compile_patch $chez_s_path/compile.ss     | macro_objs
+build $builddir/patch/fasl.so:        compile_patch $chez_s_path/fasl.ss        | macro_objs
+build $builddir/patch/vfasl.so:       compile_patch $chez_s_path/vfasl.ss       | macro_objs
+build $builddir/patch/pbchunk.so:     compile_patch $chez_s_path/pbchunk.ss     | macro_objs
+build $builddir/patch/syntax.so:      compile_patch $chez_s_path/syntax.ss      | macro_objs
+build $builddir/patch/env.so:         compile_patch $chez_s_path/env.ss         | macro_objs
+build $builddir/patch/read.so:        compile_patch $chez_s_path/read.ss        | macro_objs
+build $builddir/patch/interpret.so:   compile_patch $chez_s_path/interpret.ss   | macro_objs
+build $builddir/patch/ftype.so:       compile_patch $chez_s_path/ftype.ss       | macro_objs
+build $builddir/patch/strip.so:       compile_patch $chez_s_path/strip.ss       | macro_objs
+build $builddir/patch/ubify.so:       compile_patch $chez_s_path/ubify.ss       | macro_objs
+build $builddir/patch/back.so:        compile_patch $chez_s_path/back.ss        | macro_objs
+
+build $builddir/boot/library.$m:     compile_target $chez_s_path/library.ss     | macro_objs patch_objs
+build $builddir/boot/prims.$m:       compile_target $chez_s_path/prims.ss       | macro_objs patch_objs
+build $builddir/boot/mathprims.$m:   compile_target $chez_s_path/mathprims.ss   | macro_objs patch_objs
+build $builddir/boot/record.$m:      compile_target $chez_s_path/record.ss      | macro_objs patch_objs
+build $builddir/boot/5_1.$m:         compile_target $chez_s_path/5_1.ss         | macro_objs patch_objs
+build $builddir/boot/5_2.$m:         compile_target $chez_s_path/5_2.ss         | macro_objs patch_objs
+build $builddir/boot/5_3.$m:         compile_target $chez_s_path/5_3.ss         | macro_objs patch_objs
+build $builddir/boot/strnum.$m:      compile_target $chez_s_path/strnum.ss      | macro_objs patch_objs
+build $builddir/boot/bytevector.$m:  compile_target $chez_s_path/bytevector.ss  | macro_objs patch_objs
+build $builddir/boot/5_4.$m:         compile_target $chez_s_path/5_4.ss         | macro_objs patch_objs
+  more_path = "$unicode_path"
+build $builddir/boot/5_6.$m:         compile_target $chez_s_path/5_6.ss         | macro_objs patch_objs
+build $builddir/boot/5_7.$m:         compile_target $chez_s_path/5_7.ss         | macro_objs patch_objs
+build $builddir/boot/event.$m:       compile_target $chez_s_path/event.ss       | macro_objs patch_objs
+build $builddir/boot/4.$m:           compile_target $chez_s_path/4.ss           | macro_objs patch_objs
+build $builddir/boot/front.$m:       compile_target $chez_s_path/front.ss       | macro_objs patch_objs
+build $builddir/boot/foreign.$m:     compile_target $chez_s_path/foreign.ss     | macro_objs patch_objs
+build $builddir/boot/6.$m:           compile_target $chez_s_path/6.ss           | macro_objs patch_objs
+build $builddir/boot/print.$m:       compile_target $chez_s_path/print.ss       | macro_objs patch_objs
+build $builddir/boot/newhash.$m:     compile_target $chez_s_path/newhash.ss     | macro_objs patch_objs
+build $builddir/boot/format.$m:      compile_target $chez_s_path/format.ss      | macro_objs patch_objs
+build $builddir/boot/date.$m:        compile_target $chez_s_path/date.ss        | macro_objs patch_objs
+build $builddir/boot/7.$m:           compile_target $chez_s_path/7.ss           | macro_objs patch_objs
+build $builddir/boot/cafe.$m:        compile_target $chez_s_path/cafe.ss        | macro_objs patch_objs
+build $builddir/boot/trace.$m:       compile_target $chez_s_path/trace.ss       | macro_objs patch_objs
+build $builddir/boot/engine.$m:      compile_target $chez_s_path/engine.ss      | macro_objs patch_objs
+build $builddir/boot/interpret.$m:   compile_target $chez_s_path/interpret.ss   | macro_objs patch_objs
+build $builddir/boot/cprep.$m:       compile_target $chez_s_path/cprep.ss       | macro_objs patch_objs
+build $builddir/boot/cpcheck.$m:     compile_target $chez_s_path/cpcheck.ss     | macro_objs patch_objs
+build $builddir/boot/cp0.$m:         compile_target $chez_s_path/cp0.ss         | macro_objs patch_objs
+build $builddir/boot/cpvalid.$m:     compile_target $chez_s_path/cpvalid.ss     | macro_objs patch_objs
+build $builddir/boot/cptypes.$m:     compile_target $chez_s_path/cptypes.ss     | macro_objs patch_objs
+build $builddir/boot/cpcommonize.$m: compile_target $chez_s_path/cpcommonize.ss | macro_objs patch_objs
+build $builddir/boot/cpletrec.$m:    compile_target $chez_s_path/cpletrec.ss    | macro_objs patch_objs
+build $builddir/boot/inspect.$m:     compile_target $chez_s_path/inspect.ss     | macro_objs patch_objs
+build $builddir/boot/enum.$m:        compile_target $chez_s_path/enum.ss        | macro_objs patch_objs
+build $builddir/boot/io.$m:          compile_target $chez_s_path/io.ss          | macro_objs patch_objs
+build $builddir/boot/read.$m:        compile_target $chez_s_path/read.ss        | macro_objs patch_objs
+build $builddir/boot/primvars.$m:    compile_target $chez_s_path/primvars.ss    | macro_objs patch_objs
+build $builddir/boot/syntax.$m:      compile_target $chez_s_path/syntax.ss      | macro_objs patch_objs
+build $builddir/boot/costctr.$m:     compile_target $chez_s_path/costctr.ss     | macro_objs patch_objs
+build $builddir/boot/expeditor.$m:   compile_target $chez_s_path/expeditor.ss   | macro_objs patch_objs
+build $builddir/boot/exceptions.$m:  compile_target $chez_s_path/exceptions.ss  | macro_objs patch_objs
+build $builddir/boot/pretty.$m:      compile_target $chez_s_path/pretty.ss      | macro_objs patch_objs
+build $builddir/boot/env.$m:         compile_target $chez_s_path/env.ss         | macro_objs patch_objs
+build $builddir/boot/fasl.$m:        compile_target $chez_s_path/fasl.ss        | macro_objs patch_objs
+build $builddir/boot/vfasl.$m:       compile_target $chez_s_path/vfasl.ss       | macro_objs patch_objs
+build $builddir/boot/pbchunk.$m:     compile_target $chez_s_path/pbchunk.ss     | macro_objs patch_objs
+build $builddir/boot/reloc.$m:       compile_target $chez_s_path/reloc.ss       | macro_objs patch_objs
+build $builddir/boot/pdhtml.$m:      compile_target $chez_s_path/pdhtml.ss      | macro_objs patch_objs
+build $builddir/boot/strip.$m:       compile_target $chez_s_path/strip.ss       | macro_objs patch_objs
+build $builddir/boot/ftype.$m:       compile_target $chez_s_path/ftype.ss       | macro_objs patch_objs
+build $builddir/boot/back.$m:        compile_target $chez_s_path/back.ss        | macro_objs patch_objs
+
+build $builddir/boot/cpnanopass.$m:  compile_target $chez_s_path/cpnanopass.ss  | macro_objs patch_objs nanopass
+  nanopass = $builddir/nanopass/nanopass.so
+build $builddir/boot/cpprim.$m:      compile_target $chez_s_path/cpprim.ss      | macro_objs patch_objs
+build $builddir/boot/compile.$m:     compile_target $chez_s_path/compile.ss     | macro_objs patch_objs
+build $builddir/boot/cback.$m:       compile_target $chez_s_path/cback.ss       | macro_objs patch_objs
+
+build $builddir/../boot/$m/petite.boot: make_boot_file $
+  $builddir/boot/library.$m $
+  $builddir/boot/prims.$m $
+  $builddir/boot/mathprims.$m $
+  $builddir/boot/record.$m $
+  $builddir/boot/5_1.$m $
+  $builddir/boot/5_2.$m $
+  $builddir/boot/5_3.$m $
+  $builddir/boot/strnum.$m $
+  $builddir/boot/bytevector.$m $
+  $builddir/boot/5_4.$m $
+  $builddir/boot/5_6.$m $
+  $builddir/boot/5_7.$m $
+  $builddir/boot/event.$m $
+  $builddir/boot/4.$m $
+  $builddir/boot/front.$m $
+  $builddir/boot/foreign.$m $
+  $builddir/boot/6.$m $
+  $builddir/boot/print.$m $
+  $builddir/boot/newhash.$m $
+  $builddir/boot/format.$m $
+  $builddir/boot/date.$m $
+  $builddir/boot/7.$m $
+  $builddir/boot/cafe.$m $
+  $builddir/boot/trace.$m $
+  $builddir/boot/engine.$m $
+  $builddir/boot/interpret.$m $
+  $builddir/boot/cprep.$m $
+  $builddir/boot/cpcheck.$m $
+  $builddir/boot/cp0.$m $
+  $builddir/boot/cpvalid.$m $
+  $builddir/boot/cptypes.$m $
+  $builddir/boot/cpcommonize.$m $
+  $builddir/boot/cpletrec.$m $
+  $builddir/boot/inspect.$m $
+  $builddir/boot/enum.$m $
+  $builddir/boot/io.$m $
+  $builddir/boot/read.$m $
+  $builddir/boot/primvars.$m $
+  $builddir/boot/syntax.$m $
+  $builddir/boot/costctr.$m $
+  $builddir/boot/expeditor.$m $
+  $builddir/boot/exceptions.$m $
+  $builddir/boot/pretty.$m $
+  $builddir/boot/env.$m $
+  $builddir/boot/fasl.$m $
+  $builddir/boot/vfasl.$m $
+  $builddir/boot/pbchunk.$m $
+  $builddir/boot/reloc.$m $
+  $builddir/boot/pdhtml.$m $
+  $builddir/boot/strip.$m $
+  $builddir/boot/ftype.$m $
+  $builddir/boot/back.$m $
+  | macro_objs patch_objs
+
+build $builddir/../boot/$m/scheme.boot: make_boot_file $
+  $builddir/boot/cpnanopass.$m $
+  $builddir/boot/cpprim.$m $
+  $builddir/boot/compile.$m $
+  $builddir/boot/cback.$m $
+  | macro_objs patch_objs
+  base_boot_file = "petite"
+
+build $builddir/../boot/$m/gc-ocd.inc:    make_include | macro_objs patch_objs mkinc_objs
+  target = gc-ocd.inc
+build $builddir/../boot/$m/gc-oce.inc:    make_include | macro_objs patch_objs mkinc_objs
+  target = gc-oce.inc
+build $builddir/../boot/$m/gc-par.inc:    make_include | macro_objs patch_objs mkinc_objs
+  target = gc-par.inc
+build $builddir/../boot/$m/heapcheck.inc: make_include | macro_objs patch_objs mkinc_objs
+  target = heapcheck.inc
+build $builddir/../boot/$m/equates.h:     make_header  | macro_objs patch_objs mkinc_objs
+  target = equates.h
+build $builddir/../boot/$m/scheme.h:      make_header  | macro_objs patch_objs mkinc_objs
+  target = scheme.h
+  more_args = (quote $m)

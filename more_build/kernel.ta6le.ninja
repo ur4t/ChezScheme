@@ -1,0 +1,7 @@
+m = ta6le
+
+chez_cflags = -D X86_64
+
+mo = i3le
+
+include kernel.unix.ninja

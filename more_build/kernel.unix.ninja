@@ -1,0 +1,16 @@
+lz4 = liblz4.so
+zlib = libz.so
+kernel = libscheme.so
+scheme = scheme
+
+zlib_cflags = -D HAVE_UNISTD_H
+kernel_ldflags = -Wl,-rpath='$$ORIGIN' -l lz4 -l z -l m
+chez_ldflags = -Wl,-rpath='$$ORIGIN' -l curses
+
+cc = clang
+cflags = -fPIC
+ldflags = -z now -z origin -z noexecstack
+
+asm = empty
+
+include kernel.ninja

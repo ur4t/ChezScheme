@@ -1,0 +1,2 @@
+to get a working chezscheme with pb boot:
+`mkdir -p build/boot/ && cp -r ../boot/pb build/boot/ && make -f kernel.mk M=pb`

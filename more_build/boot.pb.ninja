@@ -1,0 +1,5 @@
+m = pb
+MACHINE_DEF = '(features)(include "pbcommon64.def")(include "pbcommon.def")'
+MACHINE_INCLUDE = pb.ss
+
+include boot.ninja

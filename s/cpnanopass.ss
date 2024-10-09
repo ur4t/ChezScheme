@@ -96,12 +96,13 @@
         (lambda (unparser)
           (lambda (val*)
             (safe-assert (not (null? val*)))
-            (pretty-print (flatten-seq (unparser (car val*)))))))
+            (pretty-print (flatten-seq (unparser (car val*)))
+                          (current-error-port)))))
       (define values-printer
         (lambda (val*)
           (if (null? val*)
-              (printf "no output\n")
-              (pretty-print (car val*)))))
+              (fprintf (current-error-port) "no output\n")
+              (pretty-print (car val*) (current-error-port)))))
       (define-syntax pass
         (syntax-rules ()
           [(_ (pass-name ?arg ...) ?unparser)
@@ -125,7 +126,7 @@
           (let-values ([val* (let ([th (lambda () (apply pass arg*))])
                                (if pass-time? ($pass-time pass-name th) (th)))])
             (when (memq pass-name (tracer))
-              (printf "output of ~s:\n" pass-name)
+              (fprintf (current-error-port) "output of ~s:\n" pass-name)
               (printer val*))
             (apply values val*))))
       (define-syntax xpass
@@ -718,7 +719,7 @@
            (let ([e* (map CaseLambdaExpr e* uvar*)])
              `(letrec ([,uvar* ,e*] ...) ,(Expr body))))]
         [(call ,preinfo ,e ,[e*] ...)
-         (unless (preinfo-call? preinfo) (error 'preinfo-call "oops"))
+         (safe-assert (preinfo-call? preinfo))
          `(call ,(make-info-call (preinfo-src preinfo) (preinfo-sexpr preinfo) (preinfo-call-check? preinfo) #f
                                  (and (preinfo-call-no-return? preinfo) (not (preinfo-call-check? preinfo))))
             ,(Expr e) ,e* ...)]
@@ -3004,6 +3005,8 @@
                    (add-trap-check overflow? call))))
            (let ([noc? (eq? (fold-left combine-seq oc oc*) 'no)])
              (cond
+               [(and (not e?) (trap-check-label? mdcl))
+                (values `(immediate ,(constant svoid)) 'no request-trap-check)]
                [(and (or tail? (and (info-call-error? info) (fx< (debug-level) 2))) noc?)
                 (let ([call `(call ,info ,mdcl ,e? ,e* ...)])
                   (if (info-call-pariah? info)
@@ -6247,12 +6250,16 @@
                                         (set! ,%ac0 ,%xp)
                                         (jump ,%ref-ret (,%ac0)))
                                      ,(f (cdr reg*) (fx+ i 1))))))))))]
-           [(vector-procedure)
-            (let ([Ltop (make-local-label 'ltop)])
-              `(lambda ,(make-info "vector" '(-1) #t) 0 ()
+           [(vector-procedure immutable-vector-procedure)
+            (let* ([Ltop (make-local-label 'ltop)]
+                   [mut? (eq? sym 'vector-procedure)]
+                   [constant-type-*vector (if mut?
+                                              (constant type-vector)
+                                              (constant type-immutable-vector))])
+              `(lambda ,(make-info (if mut? "vector" "immutable-vector") '(-1) #t) 0 ()
                  (if ,(%inline eq? ,%ac0 (immediate 0))
                      ,(%seq
-                        (set! ,%ac0 (literal ,(make-info-literal #f 'object '#() 0)))
+                        (set! ,%ac0 (literal ,(make-info-literal #f 'object (if mut? '#() (vector->immutable-vector '#())) 0)))
                         (jump ,%ref-ret (,%ac0)))
                      ,(%seq
                         (set! ,%ac0 ,(%inline sll ,%ac0 ,(%constant log2-ptr-bytes)))
@@ -6262,17 +6269,17 @@
                         ,(let ([delta (fx- (constant vector-length-offset) (constant log2-ptr-bytes))])
                            (safe-assert (fx>= delta 0))
                            (if (fx= delta 0)
-                               (if (fx= (constant type-vector) 0)
+                               (if (fx= constant-type-*vector 0)
                                    `(set! ,(%mref ,%xp ,(constant vector-type-disp)) ,%ac0)
                                    (%seq
-                                     (set! ,%td ,(%inline logor ,%ac0 (immediate ,(constant type-vector))))
+                                     (set! ,%td ,(%inline logor ,%ac0 (immediate ,constant-type-*vector)))
                                      (set! ,(%mref ,%xp ,(constant vector-type-disp)) ,%td)))
                                (%seq
                                  (set! ,%td ,(%inline sll ,%ac0 (immediate ,delta)))
-                                 ,(if (fx= (constant type-vector) 0)
+                                 ,(if (fx= constant-type-*vector 0)
                                       `(set! ,(%mref ,%xp ,(constant vector-type-disp)) ,%td)
                                       (%seq
-                                        (set! ,%td ,(%inline logor ,%td (immediate ,(constant type-vector))))
+                                        (set! ,%td ,(%inline logor ,%td (immediate ,constant-type-*vector)))
                                         (set! ,(%mref ,%xp ,(constant vector-type-disp)) ,%td))))))
                         ,(let f ([reg* arg-registers] [i 0])
                            (if (null? reg*)
@@ -7883,8 +7890,8 @@
                                depth))))))
                    lb*))
              (for-each (lambda (b) (block-seen! b #f)) block*)
-             #;(p-dot-graph block* (current-output-port))
-             #;(p-graph block* (info-lambda-name info) (current-output-port) unparse-L15a)))
+             #;(p-dot-graph block* (current-error-port))
+             #;(p-graph block* (info-lambda-name info) (current-error-port) unparse-L15a)))
          (for-each (lambda (b) (block-finished! b #f)) block*)
          ir]))
 
@@ -8273,8 +8280,8 @@
           (define LambdaBody
             (lambda (entry-block* block* func)
               #;(when (#%$assembly-output)
-                (p-dot-graph block* (current-output-port))
-                (p-graph block* 'whatever (current-output-port) unparse-L16))
+                (p-dot-graph block* (current-error-port))
+                (p-graph block* 'whatever (current-error-port) unparse-L16))
               (let ([block* (cons (car entry-block*) (remq (car entry-block*) block*))])
                 (for-each (lambda (block) (let ([l (block-label block)]) (when l (local-label-iteration-set! l 0) (local-label-func-set! l func)))) block*)
                 (fluid-let ([current-func func])
@@ -8341,6 +8348,7 @@
              (let ([ptrace* (map CaseLambdaExpr le* func*)])
                (for-each resolve-funcrel! funcrel*)
                (when aop
+                 (fprintf aop "output of np-generate-code (assembly):\n")
                  (for-each (lambda (ptrace) (ptrace aop)) ptrace*)
                  (flush-output-port aop))
                (local-label-func l)))])
@@ -8352,8 +8360,8 @@
            #;(let ()
                (define block-printer
                  (lambda (unparser name block*)
-                   (p-dot-graph block* (current-output-port))
-                   (p-graph block* name (current-output-port) unparser)))
+                   (p-dot-graph block* (current-error-port))
+                   (p-graph block* name (current-error-port) unparser)))
                (block-printer unparse-L16 (info-lambda-name info) block*))
            (let-values ([(code* trace* code-size) (LambdaBody entry-block* block* func)])
              ($c-make-code
@@ -10499,8 +10507,8 @@
          (let ()
            (define block-printer
              (lambda (unparser name block*)
-               (p-dot-graph block* (current-output-port))
-               (p-graph block* name (current-output-port) unparser)))
+               (p-dot-graph block* (current-error-port))
+               (p-graph block* name (current-error-port) unparser)))
            (module (RApass)
              (define RAprinter
                (lambda (unparser)

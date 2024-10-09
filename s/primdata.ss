@@ -1,12 +1,12 @@
 ;;; primdata.ss
 ;;; Copyright 1984-2017 Cisco Systems, Inc.
-;;; 
+;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
-;;; 
+;;;
 ;;; http://www.apache.org/licenses/LICENSE-2.0
-;;; 
+;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
 ;;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -215,7 +215,7 @@
   (* [sig [(number ...) -> (number)]] [flags arith-op partial-folder safeongoodargs ieee r5rs])
   (- [sig [(number number ...) -> (number)]] [flags arith-op partial-folder safeongoodargs ieee r5rs])
   (/ [sig [(number number ...) -> (number)]] [flags arith-op partial-folder ieee r5rs])
-  (abs [sig [(real) -> (real)]] [flags arith-op mifoldable discard safeongoodargs ieee r5rs])
+  (abs [sig [(real) -> (real)]] [flags arith-op mifoldable discard safeongoodargs ieee r5rs cptypes2])
   (div-and-mod [sig [(real real) -> (real real)]] [flags mifoldable+ discard])
   (div [sig [(real real) -> (real)]] [flags arith-op mifoldable discard])
   (mod [sig [(real real) -> (real)]] [flags arith-op mifoldable discard])
@@ -327,7 +327,7 @@
   (vector? [sig [(ptr) -> (boolean)]] [pred vector] [flags pure unrestricted mifoldable discard ieee r5rs])
   (make-vector [sig [(length) (length ptr) -> (vector)]] [flags alloc ieee r5rs])
   (vector [sig [(ptr ...) -> (vector)]] [flags unrestricted alloc ieee r5rs cp02])
-  (vector-length [sig [(vector) -> (length)]] [flags pure true ieee r5rs mifoldable discard safeongoodargs])
+  (vector-length [sig [(vector) -> (length)]] [flags pure true ieee r5rs mifoldable discard safeongoodargs cp02])
   (vector-ref [sig [(nonempty-vector sub-index) -> (ptr)]] [flags ieee r5rs mifoldable discard cp02])
   (vector-set! [sig [(nonempty-vector sub-index ptr) -> (void)]] [flags true ieee r5rs cptypes2])
   (vector->list [sig [(vector) -> (list)]] [flags alloc safeongoodargs ieee r5rs])
@@ -338,8 +338,8 @@
   (error [sig [(maybe-who string ptr ...) -> (bottom)]] [flags abort-op])
   (assertion-violation [sig [(maybe-who string ptr ...) -> (bottom)]] [flags abort-op])
   (apply [sig [(procedure ptr ... list) -> (ptr ...)]] [flags cp02 cptypes2x ieee r5rs])
-  (call-with-current-continuation [sig [(procedure) -> (ptr ...)]] [flags ieee r5rs])
-  (call/cc [sig [(procedure) -> (ptr ...)]] [flags])
+  (call-with-current-continuation [sig [(procedure) -> (ptr ...)]] [flags ieee r5rs cp02])
+  (call/cc [sig [(procedure) -> (ptr ...)]] [flags cp02])
   (values [sig [(ptr ...) -> (ptr ...)]] [flags unrestricted discard cp02 ieee r5rs])
   (call-with-values [sig [(procedure procedure) -> (ptr ...)]] [flags cp02 cptypes2x ieee r5rs])
   ((r6rs: dynamic-wind) [sig [(procedure procedure procedure) -> (ptr ...)]] [flags cptypes2x ieee r5rs])      ; restricted to 3 arguments
@@ -1107,6 +1107,7 @@
   (predicate [flags])
   (prefix [flags])
   (profile [flags])
+  (quote-syntax [flags])
   (rec [flags])
   (rename [flags])
   (record-case [flags])
@@ -1142,7 +1143,7 @@
   (1- [sig [(number) -> (number)]] [flags arith-op mifoldable discard safeongoodargs])
   (abort [sig [() (ptr) -> (bottom)]] [flags abort-op])
   (acosh [sig [(number) -> (number)]] [flags arith-op mifoldable discard])
-  (add1 [sig [(number) -> (number)]] [flags arith-op mifoldable discard safeongoodargs])
+  (add1 [sig [(number) -> (number)]] [flags arith-op mifoldable discard safeongoodargs cptypes2])
   (andmap [sig [(procedure list list ...) -> (ptr ...)]] [flags cp03])
   (annotation? [sig [(ptr) -> (boolean)]] [flags pure unrestricted mifoldable discard])
   (annotation-expression [sig [(annotation) -> (ptr)]] [flags pure mifoldable discard])
@@ -1204,7 +1205,7 @@
   (bytevector-u56-set! [sig [(bytevector sub-index u56 symbol) -> (void)]] [flags true])
   (bytevector-compress [sig [(ptr) -> (ptr)]] [flags])
   (bytevector-uncompress [sig [(ptr) -> (ptr)]] [flags])
-  (call/1cc [sig [(procedure) -> (ptr ...)]] [flags])
+  (call/1cc [sig [(procedure) -> (ptr ...)]] [flags cp02])
   (call-in-continuation [sig [(ptr procedure) -> (ptr ...)] [(ptr continuation-marks procedure) -> (ptr ...)]] [flags])
   (call-with-input-file [sig [(pathname procedure) (pathname procedure sub-ptr) -> (ptr ...)]] [flags ieee r5rs])      ; has options argument
   (call-with-output-file [sig [(pathname procedure) (pathname procedure sub-ptr) -> (ptr ...)]] [flags ieee r5rs])     ; has options argument
@@ -1456,6 +1457,10 @@
   (ieee-environment [sig [() -> (environment)]] [flags unrestricted alloc])
   (immutable-string? [sig [(ptr) -> (boolean)]] [pred immutable-string] [flags pure unrestricted mifoldable discard])
   (immutable-box? [sig [(ptr) -> (boolean)]] [pred immutable-box] [flags pure unrestricted mifoldable discard])
+  (immutable-vector [sig [(ptr ...) -> (immutable-vector)]] [flags unrestricted pure mifoldable alloc cp02])
+  (immutable-vector-append [sig [(vector ...) -> (immutable-vector)]] [flags alloc safeongoodargs cp02])
+  (immutable-vector-copy [sig [(vector) -> (immutable-vector)] [(vector sub-length sub-length) -> (immutable-vector)]] [flags alloc cp02])
+  (immutable-vector-set/copy [sig [(nonempty-vector sub-index ptr) -> (immutable-vector)]] [flags alloc])
   (immutable-vector? [sig [(ptr) -> (boolean)]] [pred immutable-vector] [flags pure unrestricted mifoldable discard])
   (immutable-bytevector? [sig [(ptr) -> (boolean)]] [pred immutable-bytevector] [flags pure unrestricted mifoldable discard])
   (initial-bytes-allocated [sig [() -> (uint)]] [flags unrestricted alloc])
@@ -1774,7 +1779,7 @@
   (string-grapheme-span [sig [(string sub-index) -> (uptr)] [(string sub-index sub-index) -> (uptr)]] [flags true])
   (string-truncate! [sig [(string length) -> (string)]] [flags true])
   (strip-fasl-file [sig [(pathname pathname fasl-strip-options) -> (void)]] [flags true])
-  (sub1 [sig [(number) -> (number)]] [flags arith-op mifoldable discard safeongoodargs])
+  (sub1 [sig [(number) -> (number)]] [flags arith-op mifoldable discard safeongoodargs cptypes2])
   (subst [sig [(ptr ptr ptr) -> (ptr)]] [flags discard])
   (subst! [sig [(ptr ptr ptr) -> (ptr)]] [flags])
   (substq [sig [(ptr ptr ptr) -> (ptr)]] [flags discard])
@@ -1830,12 +1835,14 @@
   (utf-16-codec [sig [() -> (codec)] [(sub-symbol) -> (codec)]] [flags pure true]) ; has optional eness argument
   (utf-16le-codec [sig [() -> (codec)]] [flags pure unrestricted true])
   (utf-16be-codec [sig [() -> (codec)]] [flags pure unrestricted true])
+  (vector-append [sig [(vector ...) -> (vector)]] [flags alloc safeongoodargs cp02])
   (vector-cas! [sig [(nonempty-vector sub-index ptr ptr) -> (boolean)]] [flags cptypes2])
-  (vector-copy [sig [(vector) -> (vector)]] [flags alloc safeongoodargs])
+  (vector-copy [sig [(vector) -> (vector)] [(vector sub-length sub-length) -> (vector)]] [flags alloc cp02])
   (vector->immutable-vector [sig [(vector) -> (immutable-vector)]] [flags alloc cp02 safeongoodargs])
   (vector->pseudo-random-generator [sig [(nonempty-vector) -> (pseudo-random-generator)]] [flags])
   (vector->pseudo-random-generator! [sig [(pseudo-random-generator nonempty-vector) -> (void)]] [flags])
   (vector-set-fixnum! [sig [(nonempty-vector sub-index fixnum) -> (void)]] [flags true])
+  (vector-set/copy [sig [(nonempty-vector sub-index ptr) -> (vector)]] [flags alloc])
   (verify-loadability [sig [(sub-symbol sub-ptr ...) -> (void)]] [flags true])
   (virtual-register [sig [(sub-index) -> (ptr)]] [flags discard])
   (virtual-register-count [sig [() -> (length)]] [flags pure unrestricted true cp02])
@@ -1953,6 +1960,7 @@
   ($cte-optimization-info [flags single-valued])
   ($c-tlv [flags single-valued])
   ($current-attachments [flags single-valued])
+  ($current-handler-stack [flags single-valued])
   ($current-stack-link [flags single-valued])
   ($current-winders [flags single-valued])
   ($datum->environment-syntax [flags single-valued])
@@ -1977,6 +1985,7 @@
   ($event [flags single-valued])
   ($event-and-resume [flags])
   ($event-and-resume* [flags])
+  ($event-trap-check [flags])
   ($exactnum? [sig [(ptr) -> (boolean)]] [pred $exactnum] [flags pure unrestricted mifoldable])
   ($exactnum-imag-part [flags single-valued])
   ($exactnum-real-part [flags single-valued])
@@ -2064,6 +2073,7 @@
   ($fptr-ref-integer-64 [flags single-valued discard])
   ($fptr-ref-integer-8 [flags single-valued discard])
   ($fptr-ref-single-float [flags single-valued discard])
+  ($fptr-ref-stdbool [flags single-valued discard])
   ($fptr-ref-swap-boolean [flags single-valued discard])
   ($fptr-ref-swap-double-float [flags single-valued discard])
   ($fptr-ref-swap-fixnum [flags single-valued discard])
@@ -2075,6 +2085,7 @@
   ($fptr-ref-swap-integer-56 [flags single-valued discard])
   ($fptr-ref-swap-integer-64 [flags single-valued discard])
   ($fptr-ref-swap-single-float [flags single-valued discard])
+  ($fptr-ref-swap-stdbool [flags single-valued discard])
   ($fptr-ref-swap-unsigned-16 [flags single-valued discard])
   ($fptr-ref-swap-unsigned-24 [flags single-valued discard])
   ($fptr-ref-swap-unsigned-32 [flags single-valued discard])
@@ -2137,6 +2148,7 @@
   ($fptr-set-integer-64! [flags single-valued])
   ($fptr-set-integer-8! [flags single-valued])
   ($fptr-set-single-float! [flags single-valued])
+  ($fptr-set-stdbool! [flags single-valued])
   ($fptr-set-swap-boolean! [flags single-valued])
   ($fptr-set-swap-double-float! [flags single-valued])
   ($fptr-set-swap-fixnum! [flags single-valued])
@@ -2148,6 +2160,7 @@
   ($fptr-set-swap-integer-56! [flags single-valued])
   ($fptr-set-swap-integer-64! [flags single-valued])
   ($fptr-set-swap-single-float! [flags single-valued])
+  ($fptr-set-swap-stdbool! [flags single-valued])
   ($fptr-set-swap-unsigned-16! [flags single-valued])
   ($fptr-set-swap-unsigned-24! [flags single-valued])
   ($fptr-set-swap-unsigned-32! [flags single-valued])

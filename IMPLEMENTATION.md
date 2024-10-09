@@ -350,7 +350,7 @@ type word indicates a vector. The fixnum value is the vector's length
 in words/objects, but shifted up by 1 bit, and then the low bit is set
 to 1 for an immutable vector.
 
-Most kinds of Scheme values are represented records, so the layout is
+Most kinds of Scheme values are represented as records, so the layout is
 defined by `define-record-type` and similar. For the primitive object
 types that are not records (and even a few that are), the layouts are
 defined in "cmacros.ss". For example, an `exactnum` (i.e., a complex
@@ -367,7 +367,7 @@ The `type-typed-object` in the first line indicates that an `exactnum`
 is represented by a pointer that is tagged with `type-typed-object`,
 and so we should expect the first field to be a type word. That's why
 the first field above is `type`, and it turns out that it will always
-contain the value `type-inexactnum`. The `iptr` type for `type` means
+contain the value `type-exactnum`. The `iptr` type for `type` means
 "a pointer-sized signed integer". The `ptr` type for `real` and `imag`
 means "pointer" or "Scheme object".
 
@@ -1352,6 +1352,15 @@ branch. Bytecode instructions are stored as little endian in compiled
 code for a basic build; on a big-endian machine, the kernel rewrites
 instruction bytes to big-endian form while loading a fasl file, so the
 interpreter can decode instructions in native order.
+
+A basic build supports only a limited, hardwired set of foreign
+interfaces that are sufficient to access kernel functions. A non-basic
+build can support the full foreign interface if the Scheme build is
+configured to use libffi. The pb32 variants assume 8-byte alignment in
+structs for doubles and 64-bit integer values, which can limit
+interoperability with foreign libraries on platforms with a different
+alignment convention (such as non-Windows x86, where doubles and
+64-bit integers need only 4-byte alignment).
 
 For a non-basic build, fragments of static Scheme code can be turned
 into C code to compile and plug back into the kernel. These fragments

@@ -1,5 +1,5 @@
-Building Chez Scheme Version 9.9.9
-Copyright 1984-2023 Cisco Systems, Inc.
+Building Chez Scheme Version 10.0.0
+Copyright 1984-2024 Cisco Systems, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -146,10 +146,19 @@ type of build and the installation location. For example,
 specifies the installation root. Run `./configure --help` for
 information on the supported options.
 
+For platforms without support for native-code compilation in Chez
+Scheme, use a machine specification like `-m=tpb64l`, which is a
+threaded, 64-bit, little-endian build. The "configure" script will
+still attept to infer compilation and linking flags for the kernel; if
+you need to give it a hint, you can use the `--os` flag with something
+like `--os=tXle`, which indicates a threaded configuration (due to the
+leading "t") on Linux (due to the trailing "le").
+
 The generated makefile mostly just ensures that a `zuo` executable is
 built in a `bin` directory, and then it defers the actual build work
 to `zuo`, which uses the "main.zuo" file. If you have `zuo` installed,
-you can use `zuo` directly instead of `make`. In general, instead of
+you can use `zuo` directly instead of `make`: in that case, you may
+wish to use `./configure ZUO=<zuo>`. In general, instead of
 the command `make X` to build target `X` as described below, you can
 use `zuo . X` (or `bin/zuo . X` after `bin/zuo` is built).
 
@@ -208,6 +217,10 @@ The makefile supports several targets:
    Installs the built executables, boot files, example files, and
    manual pages. If the `--installprefix` used with "configure" is
    writable by the current user, then `sudo` is not necessary.
+
+   To install to a staging directory instead of the final installation
+   path, use the `--temproot=<dir>` argument to the "configure" script
+   or supply `DESTDIR=<dir>` as an argument to after `make install`.
 
  * `sudo make uninstall`
 
@@ -333,7 +346,7 @@ The makefile supports several targets:
  * `make clean`
 
    Removes all built elements from the workarea, and then removes
-   `bin/zuo`.
+   `bin/zuo` (unless configured with `ZUO=<zuo>`).
 
 
 WINDOWS VIA COMMAND PROMPT
@@ -341,7 +354,7 @@ WINDOWS VIA COMMAND PROMPT
 To build on Windows with MSYS2 and MinGW gcc or Clang, follow the same
 instructions as for Unix above, but the result will be a native
 Windows build. Cygwin as a compilation target is not currently
-support.
+supported.
 
 To build on Windows with Microsoft Visual Studio, use
 
@@ -350,12 +363,12 @@ To build on Windows with Microsoft Visual Studio, use
 where <machine type> is one of the following:
 
  * pb        (portable bytecode, usually for bootstrapping)
- * ta6nt     (64-bit Intel threaded
- * a6nt      (64-bit Intel non-threaded
- * tarm64nt  (64-bit Arm threaded)
- * arm64nt   (64-bit Arm non-threaded)
- * ti3nt     (32-bit threaded)
- * i3nt      (32-bit non-threaded)
+ * ta6nt     (64-bit Intel threaded)
+ * a6nt      (64-bit Intel non-threaded)
+ * tarm64nt  (64-bit ARM threaded)
+ * arm64nt   (64-bit ARM non-threaded)
+ * ti3nt     (32-bit Intel threaded)
+ * i3nt      (32-bit Intel non-threaded)
 
 If you're using Visual Studio 2022 or 2019, install "Desktop
 development with C++" on the "Workloads" tabs and the "C++ 20[xx]
@@ -476,16 +489,6 @@ the Cygwin values are incompatible with the Microsoft C Runtime
 Library.
 
 
-WINDOWS VIA CROSS-COMPILER
-
-To cross-compile the main Chez Scheme executable for Windows using
-MinGW, specify suitable build tools to configure, perhaps using
---toolprefix= like this:
-
- ./configure -m=ta6nt --toolprefix=x86_64-w64-mingw32- CC_FOR_BUILD=cc
- make kernel
-
-
 EMSCRIPTEN
 
 To target WebAssembly via Emscripten and `emcc`, use the
@@ -536,9 +539,66 @@ Finally, configure the Emscripten build to use "demo.boot":
  make
 
 
-CROSS-COMPILING SCHEME PROGRAMS
+CROSS COMPILING
 
-Using
+To compile Chez Scheme for a target platform that is different than
+the host platform, supply the `--cross` flag to the "configure" script
+while also specifying the target machine type, compiler settings to
+build for the target platform, and `CC_FOR_BUILD=<compiler>` to
+provide a <compiler> suitable for building `bin/zuo`.
+
+For example, to cross compile for Windows with a typical MinGW
+installation, use `--toolprefix=x86_64-w64-mingw32-` to specify tools
+that compile and link via MinGW:
+
+ ./configure --cross -m=ta6nt --toolprefix=x86_64-w64-mingw32- CC_FOR_BUILD=cc
+ make
+
+The configure arguments that are needed to cross compile will vary
+with the host and target machines. On a platform where ta6osx is the
+native machine type, for example, cross compiling for tarm64osx may be
+as simple as specifying an `-arch` flag for the C compiler:
+
+ ./configure --cross -m=tarm64osx CFLAGS="-arch arm64" CC_FOR_BUILD=cc
+ make
+
+To cross compile for iOS, provide an iOS SDK path and define the
+`TARGET_OS_IPHONE` and `DISABLE_CURSES` macros:
+
+ ./configure \
+   --cross \
+   -m=tarm64ios \
+   CFLAGS="-arch arm64 -isysroot $(xcrun -sdk iphoneos --show-sdk-path) -DTARGET_OS_IPHONE -DDISABLE_CURSES -liconv" \
+   CC_FOR_BUILD=clang
+ make
+
+When additional configuration is needed for a *host* build (that is,
+when just `./configure --pb` would not be enough to build for the host
+platform), then more steps are needed. In that case, first build for
+the host platform, configuring as needed. Use the result to create
+boot files for the target using `make bootquick XM=<target machine>`
+(see also the WAYS TO GET BOOT FILES section above). Finally, use both
+`--cross` and `--force` to configure for the target platform.
+
+ ./configure -m=ta6osx         # configure for host
+ make                          # build for host
+ make bootquick XM=tarm64osx   # use host to build target boot files
+ ./configure --cross --force -m=tarm64osx CFLAGS="-arch arm64" CC_FOR_BUILD=cc
+ make                          # build for target
+
+After `make` to build, use `make install` to gather cross-compiled
+components. Typically, `--temproot=<dir>` should be supplied as a
+configure argument along with `--cross`, in which case the
+installation is placed in a <dir> to be moved to the target platform.
+Alternatively, a destination directory be selected at the installation
+step via `DESTDIR`:
+
+ make install DESTDIR=/tmp/staging
+
+
+CROSS COMPILING SCHEME PROGRAMS
+
+After a non-cross build to work on the host platform, using
 
   make bootquick XM=<machine type>
 

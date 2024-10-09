@@ -1,12 +1,12 @@
 ;;; syntax.ss
 ;;; Copyright 1984-2017 Cisco Systems, Inc.
-;;; 
+;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.
 ;;; You may obtain a copy of the License at
-;;; 
+;;;
 ;;; http://www.apache.org/licenses/LICENSE-2.0
-;;; 
+;;;
 ;;; Unless required by applicable law or agreed to in writing, software
 ;;; distributed under the License is distributed on an "AS IS" BASIS,
 ;;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -1150,6 +1150,14 @@
           (unannotate (syntax-object-expression x))
           (join-marks (wrap-marks w) (wrap-marks (syntax-object-wrap x))))
         (values (unannotate x) (wrap-marks w)))))
+
+(define id->unprefixed-id
+  (lambda (id)
+    (let* ([sym (id-sym-name id)]
+           [unprefixed-sym ($sgetprop sym '*unprefixed* sym)])
+      (if (eq? sym unprefixed-sym)
+          id
+          (make-syntax-object unprefixed-sym (syntax-object-wrap id))))))
 
 ;;; syntax object wraps
 
@@ -4940,7 +4948,7 @@
                     ($oops who "loading ~a did not define library ~s" obj-path path))]))))
       (define do-load-library-src-or-obj
         (lambda (src-path obj-path)
-          (define (load-source) 
+          (define (load-source)
             (with-message "object file is out-of-date"
               (with-message (format "loading source file ~s" src-path)
                 (do-load-library src-path 'load))))
@@ -5172,7 +5180,7 @@
                     (eq? x 'exists))
           ($oops who "~s is not a timestamp mode" x))
         x)))
-  
+
   (set! expand-omit-library-invocations
     ($make-thread-parameter #f
       (lambda (v) (and v #t))))
@@ -5214,7 +5222,7 @@
                 (let loop ([rlpinfo* '()])
                   (let ([x (fasl-read ip situation)])
                     (if (or (library-info? x) (program-info? x))
-                        (loop (cons x rlpinfo*)) 
+                        (loop (cons x rlpinfo*))
                         (begin (close-port ip) (reverse rlpinfo*))))))))))
       (unless (memq situation '(load visit revisit)) ($oops who "invalid situation ~s; should be one of load, visit, or revisit" situation))
       (let-values ([(libdirs* fn*) (parse-inputs input*)])
@@ -5511,7 +5519,7 @@
                     (for-each (lambda (req) (import-library (libreq-uid req))) (libdesc-import-req* desc))
                     (p)))]))]
           [else ($oops #f "library ~:s is not defined" uid)])))
-  
+
     ; invoking or visiting a possibly unloaded library occurs in two separate steps:
     ;   1. load library and all dependencies first, recompiling or reloading if requested and required
     ;   2. invoke or visit the library and dependencies
@@ -5892,7 +5900,7 @@
                        [else (put-global-definition-hook s b)])))])
              ; add system bindings to other modules as appropriate
               (cond
-                [(any-set? (prim-mask (or keyword system-keyword)) m)
+               [(any-set? (prim-mask (or keyword system-keyword)) m)
                  (let ([id (make-resolved-id s (wrap-marks top-wrap) s)])
                    (cond
                      [(any-set? (prim-mask keyword) m)
@@ -5900,13 +5908,14 @@
                       (store-global-subst id '*top* '())
                       (cond
                         [(any-set? (prim-mask r5rs) m)
-                         (store-global-subst id '*r5rs* '())
-                         (store-global-subst id '*r5rs-syntax* '())
-                         (cond
-                           [(any-set? (prim-mask ieee) m)
-                            (store-global-subst id '*ieee* '())
-                            (repartition id #t #t #t #t)]
-                           [else (repartition id #t #t #f #t)])]
+                         (let ([unprefixed-id (id->unprefixed-id id)])
+                           (store-global-subst unprefixed-id '*r5rs* '())
+                           (store-global-subst unprefixed-id '*r5rs-syntax* '())
+                           (cond
+                             [(any-set? (prim-mask ieee) m)
+                              (store-global-subst unprefixed-id '*ieee* '())
+                              (repartition id #t #t #t #t)]
+                             [else (repartition id #t #t #f #t)]))]
                         [else (repartition id #f #f #f #t)])]
                      [else (repartition id #f #f #f #f)]))]
                 [(any-set? (prim-mask (or primitive system)) m)
@@ -5918,12 +5927,13 @@
                       (store-global-subst id '*top* '())
                       (cond
                         [(any-set? (prim-mask r5rs) m)
-                         (store-global-subst id '*r5rs* '())
-                         (cond
-                           [(any-set? (prim-mask ieee) m)
-                            (store-global-subst id '*ieee* '())
-                            (repartition id #f #t #t #t)]
-                           [else (repartition id #f #t #f #t)])]
+                         (let ([unprefixed-id (id->unprefixed-id id)])
+                           (store-global-subst unprefixed-id '*r5rs* '())
+                           (cond
+                             [(any-set? (prim-mask ieee) m)
+                              (store-global-subst unprefixed-id '*ieee* '())
+                              (repartition id #f #t #t #t)]
+                             [else (repartition id #f #t #f #t)]))]
                         [else (repartition id #f #f #f #t)])]
                      [else (repartition id #f #f #f #f)]))]
                 [else (partition (cdr ls) r5rs-syntax r5rs ieee scheme system)]))))))
@@ -6025,6 +6035,13 @@
       (syntax-case e ()
          ((_ e) (build-data ae (strip (syntax e) w)))
          (_ (syntax-error (source-wrap e w ae))))))
+
+(global-extend 'core 'quote-syntax
+  (lambda (e r w ae)
+    (let ([e (source-wrap e w ae)])
+      (syntax-case e ()
+         ((_ e) (build-data no-source (syntax e)))
+         (_ (syntax-error e))))))
 
 (global-extend 'core 'syntax
   (let ()
@@ -8317,9 +8334,9 @@
                    (lambda () expr)
                    (rec define-values-consumer
                      #,(if (or (= (optimize-level) 3) (identifier? #'formals))
-                           #'(lambda formals (vector ffml ...))
+                           #'(lambda formals (immutable-vector ffml ...))
                            #`(case-lambda
-                               [formals (vector ffml ...)]
+                               [formals (immutable-vector ffml ...)]
                                [args #,($make-source-oops #'define-values
                                          "incorrect number of values from rhs"
                                          #'expr)])))))
@@ -8866,7 +8883,7 @@
         integer-8 unsigned-8 integer-16 unsigned-16 integer-24 unsigned-24
         integer-32 unsigned-32 integer-40 unsigned-40 integer-48 unsigned-48
         integer-56 unsigned-56 integer-64 unsigned-64
-        boolean fixnum char wchar u8* u16* u32* utf-8 utf-16le utf-16be utf-16
+        boolean stdbool fixnum char wchar u8* u16* u32* utf-8 utf-16le utf-16be utf-16
         utf-32le utf-32be utf-32) type]
       [(void) (and void-okay? type)]
       [(ptr) 'scheme-object]
@@ -8954,7 +8971,7 @@
            a))]
       [else
        (case type
-         [(boolean void) '(lambda (id) #t)]
+         [(boolean stdbool void) '(lambda (id) #t)]
          [(char) '(lambda (id) (and (char? id) (fx<= (char->integer id) #xff)))]
          [(wchar)
           (constant-case wchar-bits
@@ -9048,6 +9065,11 @@
                                        (#,(constant-case int-bits
                                             [(32) #'integer-32]
                                             [(64) #'integer-64])))]
+                                   [(stdbool)
+                                    #`(()
+                                       ((if x 1 0))
+                                       (#,(constant-case stdbool-bits
+                                            [(8) #'integer-8])))]
                                    [(char)
                                     #`(()
                                        (#,(if unsafe?
@@ -9172,6 +9194,9 @@
                                        #,(constant-case int-bits
                                            [(32) #'integer-32]
                                            [(64) #'integer-64]))]
+                         [(stdbool) #`((lambda (x) (not (eq? x 0)))
+                                       #,(constant-case stdbool-bits
+                                           [(8) #'integer-8]))]
                          [(char) #'((lambda (x) (#3%integer->char (#3%fxlogand x #xff)))
                                     unsigned-8)]
                          [(wchar) #`(integer->char
@@ -9268,6 +9293,12 @@
                                        (#,(constant-case int-bits
                                             [(32) #'integer-32]
                                             [(64) #'integer-64]))))]
+                                 [(stdbool)
+                                  (with-syntax ([(x) (generate-temporaries #'(*))])
+                                    #`((not (eq? x 0))
+                                       (x)
+                                       (#,(constant-case stdbool-bits
+                                            [(8) #'integer-8]))))]
                                  [(char)
                                   (with-syntax ([(x) (generate-temporaries #'(*))])
                                     #`((#3%integer->char (#3%fxlogand x #xff))
@@ -9368,6 +9399,10 @@
                                        #,(constant-case int-bits
                                            [(32) #'integer-32]
                                            [(64) #'integer-64])
+                                       [] [])]
+                         [(stdbool) #`((lambda (x) (if x 1 0))
+                                       #,(constant-case stdbool-bits
+                                           [(8) #'integer-8])
                                        [] [])]
                          [(char)
                           #`((lambda (x)
@@ -9519,7 +9554,9 @@
                       "invalid return value ~s from ~s"
                       x p))
                   #,@(if unsafe? #'() #'((unless (procedure? p) ($oops 'foreign-callable "~s is not a procedure" p))))
-                  (lambda (extra ... t ... ...) (result-filter (p extra ... actual ...))))
+                  (lambda (extra ... t ... ...)
+                    ($event-trap-check) ; ensure eventual `($event)` in the case of many short callbacks
+                    (result-filter (p extra ... actual ...))))
                 (extra-arg ... arg ... ...)
                 result)))))))
 

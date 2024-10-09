@@ -232,7 +232,8 @@
       (error? (load-shared-object 3))
     )
    ]
-  [(i3osx ti3osx a6osx ta6osx ppc32osx tppc32osx arm64osx tarm64osx)
+  [(i3osx ti3osx a6osx ta6osx ppc32osx tppc32osx arm64osx tarm64osx
+          a6ios ta6ios arm64ios tarm64ios)
    (mat load-shared-object
      (file-exists? foreign1.so)
       (begin (load-shared-object foreign1.so) #t)
@@ -932,6 +933,7 @@
   (equal? (foreign-sizeof 'unsigned-long) (foreign-sizeof 'long))
   (equal? (foreign-sizeof 'unsigned-long-long) (foreign-sizeof 'long-long))
   (equal? (foreign-sizeof 'boolean) (foreign-sizeof 'int))
+  (equal? (foreign-sizeof 'stdbool) (foreign-sizeof 'stdbool))
   (equal? (foreign-sizeof 'fixnum) (foreign-sizeof 'iptr))
   (equal? (foreign-sizeof 'scheme-object) (foreign-sizeof 'void*))
   (equal? (foreign-sizeof 'ptr) (foreign-sizeof 'void*))
@@ -2594,6 +2596,19 @@
       (eqv? (Srvtest_boolean Frvtest_boolean "abcdefg") #t)
       (eqv? (Srvtest_boolean Frvtest_boolean "gfedcba") #f)))
   (let ()
+    (define Frvtest_stdbool
+      (foreign-callable
+        (lambda (x) (equal? x "abCDEfg"))
+        (scheme-object)
+        stdbool))
+    (define Srvtest_stdbool
+      (foreign-procedure "Srvtest_stdbool"
+        (scheme-object scheme-object)
+        stdbool))
+    (and
+      (eqv? (Srvtest_stdbool Frvtest_stdbool "abCDEfg") #t)
+      (eqv? (Srvtest_stdbool Frvtest_stdbool "gfEDCba") #f)))
+  (let ()
     (define Frvtest_fixnum
       (foreign-callable
         (lambda (x) (* x x))
@@ -3091,7 +3106,8 @@
          '(load-shared-object "libc.so.7")]
         [(i3nt ti3nt a6nt ta6nt arm64nt tarm64nt)
          '(load-shared-object "msvcrt.dll")]
-        [(i3osx ti3osx a6osx ta6osx ppc32osx tppc32osx arm64osx tarm64osx)
+        [(i3osx ti3osx a6osx ta6osx ppc32osx tppc32osx arm64osx tarm64osx
+                a6ios ta6ios arm64ios tarm64ios)
          '(load-shared-object "libc.dylib")]
         [(pb pb32l pb32b pb64l pb64b tpb tpb32l tpb32b tpb64l tpb64b)
          '(let ([try-load (lambda (path)
@@ -3521,7 +3537,7 @@
       (let* ([exception #f]
              [callback (make-ftype-pointer thread-callback-T
                          (lambda (arg)
-                           ;; Don't let an exception reset this tread.
+                           ;; Don't let an exception reset this thread.
                            (guard [c (else (set! exception c) 0.0)]
                              (cb-proc arg))))]
              [r (proc callback)])
@@ -3538,8 +3554,7 @@
          [else (loop (fx+ i 1) (proc arg))])))
     (define call-in-unknown-thread-2
       ;; Call in the current thread, but through the foreign procedure
-      (if (and (threaded?)
-               (foreign-entry? "call_in_unknown_thread"))
+      (if (threaded?)
           (let ([call (foreign-procedure "call_in_unknown_thread"
                                          ((* thread-callback-T) double int boolean boolean)
                                          double)])
@@ -3550,8 +3565,7 @@
           call-in-unknown-thread-1))
     (define call-in-unknown-thread-3
       ;; Call in a truly unknown thread:
-      (if (and (threaded?)
-               (foreign-entry? "call_in_unknown_thread"))
+      (if (threaded?)
           (let ([call (foreign-procedure "call_in_unknown_thread"
                                          ((* thread-callback-T) double int boolean boolean)
                                          double)])
@@ -3564,8 +3578,7 @@
       ;; In an truly unknown thread, but also using `__collect_safe` to
       ;; deactivate the current thread instead of using `Sdeactivate_thread`
       ;; within the foreign function:
-      (if (and (threaded?)
-               (foreign-entry? "call_in_unknown_thread"))
+      (if (threaded?)
           (let ([call (foreign-procedure __collect_safe "call_in_unknown_thread"
                                          ((* thread-callback-T) double int boolean boolean)
                                          double)])
@@ -3626,6 +3639,26 @@
               (loop))))
         (when exception (raise exception))
         ok?))
+
+  ;; make sure that lots of threads created to perform very little work
+  ;; doesn't use a huge amount of memory --- that is, that some of the
+  ;; threads trigger a GC
+  (or (not (threaded?))
+      (let ([old-max (maximum-memory-bytes)])
+        (let ([call (foreign-procedure __collect_safe
+                                       "call_in_many_unknown_threads" (uptr int int)
+                                       int)]
+              ;; manage callable pointer directly so that callback is minimal
+              [callable (foreign-callable (lambda (n) n) (int) int)])
+          (lock-object callable)
+          (and
+           (equal? 17
+                   (call (foreign-callable-entry-point callable)
+                         17
+                         10000))
+           (begin
+             (unlock-object callable)
+             (< (maximum-memory-bytes) (* 1.2 old-max)))))))
 )
 
 (machine-case
@@ -3663,11 +3696,46 @@
   (error? (make-reference-bytevector -1))
   (error? (bytevector-reference-ref #vu8(1 2 3) 0))
   (error? (bytevector-reference-ref (make-reference-bytevector 8) -8))
+  (< 3 (foreign-sizeof 'ptr)) ;; assumption for some of the following tests
+  (error? (bytevector-reference-ref (make-reference-bytevector 3) 1))
+  (error? (bytevector-reference-ref (make-reference-bytevector 3) 0))
+  (error? (bytevector-reference-ref (make-reference-bytevector 3) -1))
+  (error? (guard (x [#t (error 'bytevector-reference-ref "failed as expected")])
+                 ;; guard the exception to hide the size of the vector, which
+                 ;; varies with the machine's word size
+                 (bytevector-reference-ref (make-reference-bytevector (foreign-sizeof 'ptr)) 1)))
   (error? (bytevector-reference-ref (make-reference-bytevector 8) 'oops))
   (error? (bytevector-reference*-ref (make-reference-bytevector 8) -8))
   (error? (bytevector-reference*-ref (make-reference-bytevector 8) 'oops))
+  (error? (bytevector-reference*-ref (make-reference-bytevector 3) 1))
+  (error? (bytevector-reference*-ref (make-reference-bytevector 3) 0))
+  (error? (bytevector-reference*-ref (make-reference-bytevector 3) -1))
+  (error? (guard (x [#t (error 'bytevector-reference-ref "failed as expected")])
+                 (bytevector-reference-ref (make-reference*-bytevector (foreign-sizeof 'ptr)) 1)))
+  (error? (bytevector-reference-set! (make-reference-bytevector 8) -8 #false))
+  (error? (bytevector-reference-set! (make-reference-bytevector 8) 'oops #false))
+  (error? (bytevector-reference-set! (make-reference-bytevector 3) 1 #false))
+  (error? (bytevector-reference-set! (make-reference-bytevector 3) 0 #false))
+  (error? (guard (x [#t (error 'bytevector-reference-set! "failed as expected")])
+                 (bytevector-reference-set! (make-reference-bytevector  (foreign-sizeof 'ptr)) 1 #false)))
   (error? (reference-address->object #f))
   (error? (reference*-address->object #f))
+
+  (equal? #false (bytevector-reference-ref (make-reference-bytevector (foreign-sizeof 'ptr)) 0))
+  (equal? #false (bytevector-reference*-ref (make-reference-bytevector (foreign-sizeof 'ptr)) 0))
+  (equal? (void) (bytevector-reference-set! (make-reference-bytevector (foreign-sizeof 'ptr)) 0 #false))
+
+  ;; ensure that a GC correctly handles extra bytes that don't fit into a word:
+  (let ([make (lambda ()
+                (let ([bv (make-reference-bytevector (- (foreign-sizeof 'ptr) 1))]
+                      [bv2 (make-reference-bytevector (+ (foreign-sizeof 'ptr) 1))])
+                  (bytevector-u8-set! bv 0 72)
+                  (bytevector-u8-set! bv2 (foreign-sizeof 'ptr) 73)
+                  (list bv bv2)))])
+    (let ([pre (make)])
+      (collect-rendezvous)
+      (equal? pre
+              (make))))
 
   (not (reference-bytevector? #vu8(1 2 3)))
   (not (reference-bytevector? 7))

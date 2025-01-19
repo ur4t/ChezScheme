@@ -24,7 +24,7 @@ export CFLAGS += -MJ $(addsuffix .json,$$(@))
 db: kernel
 	echo '' > compile_commands.json
 	echo '[' >> compile_commands.json
-	fd json build/c.$(M) -x cat {} >> compile_commands.json
+	find build/c.$(M) -name "*.json" -exec cat {} \; >> compile_commands.json
 	echo ']' >> compile_commands.json
 endif
 

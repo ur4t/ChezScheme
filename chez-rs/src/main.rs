@@ -21,7 +21,7 @@ struct Args {
     #[arg(long, help = "Enable import search messages")]
     import_notify: bool,
     #[arg(long, help = "Set optimize-level", default_value = "0")]
-    optimize_level: isize,
+    optimize_level: i64,
     #[arg(long, help = "On uncaught exception, call debug")]
     debug_on_exception: bool,
     #[arg(long, help = "Disable expression editor")]

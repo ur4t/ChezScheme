@@ -558,7 +558,7 @@ static IBOOL next_path(const char *execpath, char *path,
               t = tstart;
               if (tend != t) tend -= 1; /* back up to directory separator */
               while (t != tend) setp(*t++);
-              free(tstart);
+              RS_free_str(tstart);
               break;
             }
             case 'm':

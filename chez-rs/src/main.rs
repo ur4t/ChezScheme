@@ -1,7 +1,6 @@
 use clap::Parser;
 use std::path::PathBuf;
 
-
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -42,7 +41,6 @@ struct Args {
 }
 
 fn main() {
-    use kernel::ta6le::*;
     use kernel::*;
     let exec_path = std::env::current_exe().unwrap();
     let exec_path = exec_path.file_name().unwrap().to_str().unwrap();
@@ -57,8 +55,6 @@ fn main() {
     if args.verbose {
         set_verbose();
     }
-
-    println!("{:?}", args);
 
     build_heap(exec_path);
 

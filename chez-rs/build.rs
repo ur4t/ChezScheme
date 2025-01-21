@@ -60,8 +60,8 @@ fn main() {
             "../c/scheme.c",
             "../c/random.c",
             "../c/ffi.c",
-            "../c/self-exe.c",
-            "../c/i3le.c", // "../c/$mo.c",
+            // "../c/self-exe.c",
+            // "../c/i3le.c", // "../c/$mo.c",
         ])
         .includes([
             "../lz4/lib",

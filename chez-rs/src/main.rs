@@ -1,6 +1,13 @@
 use clap::Parser;
 use std::path::PathBuf;
 
+mod deps {
+    #[allow(unused_imports)]
+    use libz_sys::zlibVersion;
+    #[allow(unused_imports)]
+    use lz4_sys::LZ4F_VERSION;
+}
+
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {

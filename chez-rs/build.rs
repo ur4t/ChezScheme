@@ -1,35 +1,8 @@
 fn main() {
-    println!("cargo:rerun-if-changed=../lz4/lib");
-    println!("cargo:rerun-if-changed=../zlib");
     println!("cargo:rerun-if-changed=../c");
     println!("cargo:rerun-if-changed=../more_build/config.h");
     println!("cargo:rustc-link-lib=curses");
     cc::Build::new()
-        .files([
-            "../lz4/lib/lz4.c",
-            "../lz4/lib/lz4frame.c",
-            "../lz4/lib/lz4hc.c",
-            "../lz4/lib/xxhash.c",
-        ])
-        .files([
-            "../zlib/adler32.c",
-            "../zlib/crc32.c",
-            "../zlib/deflate.c",
-            "../zlib/infback.c",
-            "../zlib/inffast.c",
-            "../zlib/inflate.c",
-            "../zlib/inftrees.c",
-            "../zlib/trees.c",
-            "../zlib/zutil.c",
-            "../zlib/compress.c",
-            "../zlib/uncompr.c",
-            "../zlib/gzclose.c",
-            "../zlib/gzlib.c",
-            "../zlib/gzread.c",
-            "../zlib/gzwrite.c",
-        ])
-        .define("HAVE_UNISTD_H", None)
-        .define("HAVE_STDARG_H", None)
         .files([
             "../c/statics.c",
             "../c/segment.c",

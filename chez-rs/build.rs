@@ -48,6 +48,7 @@ fn main() {
         .flag("-Wextra")
         .flag("-Wall")
         .flag("-Wno-unused-parameter")
+        .flag("-Wno-unused-function")
         .pic(true)
         .define("X86_64", None)
         .compile("kernel");

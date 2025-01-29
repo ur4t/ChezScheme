@@ -1,12 +1,12 @@
 /* compress-io.c
  * Copyright 1984-2019 Cisco Systems, Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -91,7 +91,7 @@ static INT glzread_lz4(lz4File_in *lz4, void *buffer, UINT count);
 static INT glzemit_lz4(lz4File_out *lz4, void *buffer, UINT count);
 static INT glzwrite_lz4(lz4File_out *lz4, void *buffer, UINT count);
 
-INT S_zlib_compress_level(INT compress_level) {
+INT _S_zlib_compress_level(INT compress_level) {
   switch (compress_level) {
     case COMPRESS_MIN:
     case COMPRESS_LOW:
@@ -108,7 +108,7 @@ INT S_zlib_compress_level(INT compress_level) {
   }
 }
 
-static glzFile glzdopen_output_gz(INT fd, INT compress_level) {
+static glzFile _glzdopen_output_gz(INT fd, INT compress_level) {
   gzFile gz;
   glzFile glz;
   INT as_append;
@@ -137,7 +137,7 @@ static glzFile glzdopen_output_gz(INT fd, INT compress_level) {
   return glz;
 }
 
-INT S_lz4_compress_level(INT compress_level) {
+INT _S_lz4_compress_level(INT compress_level) {
   switch (compress_level) {
     case COMPRESS_MIN:
     case COMPRESS_LOW:
@@ -154,7 +154,7 @@ INT S_lz4_compress_level(INT compress_level) {
   }
 }
 
-static glzFile glzdopen_output_lz4(INT fd, INT compress_level) {
+static glzFile _glzdopen_output_lz4(INT fd, INT compress_level) {
   glzFile glz;
   lz4File_out *lz4;
   INT level;
@@ -198,7 +198,7 @@ static glzFile glzdopen_input_gz(INT fd) {
   glzFile glz;
 
   if ((gz = gzdopen(fd, "rb")) == Z_NULL) return Z_NULL;
-  
+
   if ((glz = malloc(sizeof(struct glzFile_r))) == NULL) {
     (void)gzclose(gz);
     return Z_NULL;

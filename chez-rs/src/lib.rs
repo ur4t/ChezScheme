@@ -1,4 +1,5 @@
 pub mod cffi;
+pub mod compress_io;
 pub mod wrapper;
 
 pub mod ta6le;

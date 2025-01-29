@@ -29,6 +29,11 @@ pub fn call1(who: &str, x1: ptr) -> ptr {
     unsafe { Scall1(Stop_level_value(string_to_symbol(who)), x1) }
 }
 
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub(crate) fn error1(who: &str, s: &str, x: ptr) {
+    unsafe { S_error1(cstr!(who), cstr!(s), x) }
+}
+
 pub fn scheme_init() {
     unsafe { Sscheme_init(None) }
 }

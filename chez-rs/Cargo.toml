@@ -12,7 +12,8 @@ name = "scheme"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version = "^4.5", features = ["derive"] }
+libz-sys = "^1.1"
+lz4-sys = "^1.11"
 
 [build-dependencies]
 cc = { version = "^1.2", features = ["parallel"] }

@@ -1,73 +1,61 @@
 fn main() {
-    println!("cargo:rerun-if-changed=../lz4/lib");
-    println!("cargo:rerun-if-changed=../zlib");
-    println!("cargo:rerun-if-changed=../c");
-    println!("cargo:rerun-if-changed=../more_build/config.h");
-    println!("cargo:rustc-link-lib=curses");
+    let (machine_code, machine_macro, machine_source) = if cfg!(all(target_os = "linux")) {
+        ("ta6le", "X86_64", "i3le")
+    } else {
+        ("pb", "PORTABLE_BYTECODE", "pb")
+    };
+    let boot_dir = format!("../boot/{}", machine_code);
+    let c_cources = [
+        "statics",
+        "segment",
+        "alloc",
+        "symbol",
+        "intern",
+        "gcwrapper",
+        "gc-011",
+        "gc-par",
+        "gc-ocd",
+        "gc-oce",
+        "number",
+        "schsig",
+        "io",
+        "new-io",
+        "compress-io",
+        "fasl",
+        "vfasl",
+        "print",
+        "stats",
+        "foreign",
+        "prim",
+        "prim5",
+        "flushcache",
+        "schlib",
+        "thread",
+        "expeditor",
+        "scheme",
+        "random",
+        "ffi",
+        "self-exe",
+        machine_source,
+        "main",
+    ]
+    .map(|i| format!("../c/{}.c", i));
+    c_cources
+        .iter()
+        .for_each(|i| println!("cargo::rerun-if-changed={}", i));
+    [&boot_dir, "config.h"]
+        .iter()
+        .for_each(|i| println!("cargo::rerun-if-changed={}", i));
+    ["curses", "lz4", "z"]
+        .iter()
+        .for_each(|i| println!("cargo::rustc-link-lib={}", i));
     cc::Build::new()
-        .files([
-            "../lz4/lib/lz4.c",
-            "../lz4/lib/lz4frame.c",
-            "../lz4/lib/lz4hc.c",
-            "../lz4/lib/xxhash.c",
-        ])
-        .files([
-            "../zlib/adler32.c",
-            "../zlib/crc32.c",
-            "../zlib/deflate.c",
-            "../zlib/infback.c",
-            "../zlib/inffast.c",
-            "../zlib/inflate.c",
-            "../zlib/inftrees.c",
-            "../zlib/trees.c",
-            "../zlib/zutil.c",
-            "../zlib/compress.c",
-            "../zlib/uncompr.c",
-            "../zlib/gzclose.c",
-            "../zlib/gzlib.c",
-            "../zlib/gzread.c",
-            "../zlib/gzwrite.c",
-        ])
-        .define("HAVE_UNISTD_H", None)
-        .define("HAVE_STDARG_H", None)
-        .files([
-            "../c/statics.c",
-            "../c/segment.c",
-            "../c/alloc.c",
-            "../c/symbol.c",
-            "../c/intern.c",
-            "../c/gcwrapper.c",
-            "../c/gc-011.c",
-            "../c/gc-par.c",
-            "../c/gc-ocd.c",
-            "../c/gc-oce.c",
-            "../c/number.c",
-            "../c/schsig.c",
-            "../c/io.c",
-            "../c/new-io.c",
-            "../c/compress-io.c",
-            "../c/fasl.c",
-            "../c/vfasl.c",
-            "../c/print.c",
-            "../c/stats.c",
-            "../c/foreign.c",
-            "../c/prim.c",
-            "../c/prim5.c",
-            "../c/flushcache.c",
-            "../c/schlib.c",
-            "../c/thread.c",
-            "../c/expeditor.c",
-            "../c/scheme.c",
-            "../c/random.c",
-            "../c/ffi.c",
-            "../c/self-exe.c",
-            "../c/i3le.c", // "../c/$mo.c",
-        ])
+        .files(c_cources)
         .includes([
-            "../lz4/lib",
-            "../zlib",
-            "../more_build/build/boot/ta6le",
-            "../more_build",
+            &std::env::var("DEP_Z_INCLUDE").unwrap(),
+            &std::env::var("DEP_LZ4_INCLUDE").unwrap(),
+            &boot_dir,
+            ".",
         ])
         .flag("-pthread")
         .flag("-m64")
@@ -76,6 +64,6 @@ fn main() {
         .flag("-Wall")
         .flag("-Wno-unused-parameter")
         .pic(true)
-        .define("X86_64", None)
+        .define(machine_macro, None)
         .compile("kernel");
 }

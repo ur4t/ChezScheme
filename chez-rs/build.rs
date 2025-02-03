@@ -37,7 +37,6 @@ fn main() {
         "ffi",
         "self-exe",
         machine_source,
-        "main",
     ]
     .map(|i| format!("../c/{}.c", i));
     c_cources
